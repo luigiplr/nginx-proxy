@@ -119,8 +119,6 @@ upstream {{ $upstream_name }} {
 {{/* Get the HTTPS_METHOD defined by containers w/ the same vhost, falling back to "redirect" */}}
 {{ $https_method := or (first (groupByKeys $containers "Env.HTTPS_METHOD")) "redirect" }}
 
-{{ $is_https := (and (ne $https_method "nohttps") (ne $cert "") (exists (printf "/etc/nginx/certs/%s.crt" $cert)) (exists (printf "/etc/nginx/certs/%s.key" $cert))) }}
-
 server {
 	server_name {{ $host }};
 	listen 443 ssl http2 {{ $default_server }};
