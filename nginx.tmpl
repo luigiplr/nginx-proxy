@@ -50,7 +50,7 @@ log_format vhost '$host $remote_addr - $remote_user [$time_local] '
 access_log off;
 
 {{ if $.Env.RESOLVERS }}
-	resolver {{ $.Env.RESOLVERS }};
+resolver {{ $.Env.RESOLVERS }};
 {{ end }}
 
 # HTTP 1.1 support
@@ -66,6 +66,9 @@ proxy_set_header X-Forwarded-Port $proxy_x_forwarded_port;
 
 # Mitigate httpoxy attack (see README for details)
 proxy_set_header Proxy "";
+{{ end }}
+
+{{ $enable_ipv6 := eq (or ($.Env.ENABLE_IPV6) "") "true" }}
 
 {{ range $host, $containers := groupByMulti $ "Env.VIRTUAL_HOST" "," }}
 
@@ -103,14 +106,23 @@ upstream {{ $upstream_name }} {
 {{ $default_host := or ($.Env.DEFAULT_HOST) "" }}
 {{ $default_server := index (dict $host "" $default_host "default_server") $host }}
 
+{{/* Get the VIRTUAL_PROTO defined by containers w/ the same vhost, falling back to "http" */}}
 {{ $proto := trim (or (first (groupByKeys $containers "Env.VIRTUAL_PROTO")) "http") }}
+
+{{/* Get the HTTPS_METHOD defined by containers w/ the same vhost, falling back to "redirect" */}}
+{{ $https_method := or (first (groupByKeys $containers "Env.HTTPS_METHOD")) "redirect" }}
+
+{{/* Get the first cert name defined by containers w/ the same vhost */}}
 {{ $certName := (first (groupByKeys $containers "Env.CERT_NAME")) }}
+
+{{/* Get the best matching cert  by name for the vhost. */}}
 {{ $vhostCert := (closest (dir "/etc/nginx/certs") (printf "%s.crt" $host))}}
 
+{{/* vhostCert is actually a filename so remove any suffixes since they are added later */}}
 {{ $vhostCert := trimSuffix ".crt" $vhostCert }}
 {{ $vhostCert := trimSuffix ".key" $vhostCert }}
 
-{{ $https_method := or (first (groupByKeys $containers "Env.HTTPS_METHOD")) "redirect" }}
+{{/* Use the cert specified on the container or fallback to the best vhost match */}}
 {{ $cert := (coalesce $certName $vhostCert) }}
 
 server {
@@ -118,13 +130,12 @@ server {
 	listen 443 ssl http2 {{ $default_server }};
 	access_log /var/log/nginx/access.log vhost;
 
-	ssl on;
 	ssl_certificate /etc/nginx/certs/{{ (printf "%s.crt" $cert) }};
 	ssl_certificate_key /etc/nginx/certs/{{ (printf "%s.key" $cert) }};
 
 	location / {
-		proxy_pass 							https://{{ trim $upstream_name }};
-		proxy_ssl_verify        off;
+		proxy_pass https://{{ trim $upstream_name }};
+		proxy_ssl_verify off;
 	}
 }
 
@@ -134,6 +145,9 @@ server {
 	access_log /var/log/nginx/access.log vhost;
 
 	location / {
-		proxy_pass 							http://{{ trim $upstream_name }};
+		proxy_pass http://{{ trim $upstream_name }};
 	}
 }
+
+{{ end }}
+{{ end }}
