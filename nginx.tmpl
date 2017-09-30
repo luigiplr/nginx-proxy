@@ -50,7 +50,7 @@ log_format vhost '$host $remote_addr - $remote_user [$time_local] '
 access_log off;
 
 {{ if $.Env.RESOLVERS }}
-resolver {{ $.Env.RESOLVERS }};
+	resolver {{ $.Env.RESOLVERS }};
 {{ end }}
 
 # HTTP 1.1 support
@@ -103,22 +103,14 @@ upstream {{ $upstream_name }} {
 {{ $default_host := or ($.Env.DEFAULT_HOST) "" }}
 {{ $default_server := index (dict $host "" $default_host "default_server") $host }}
 
-{{/* Get the VIRTUAL_PROTO defined by containers w/ the same vhost, falling back to "http" */}}
 {{ $proto := trim (or (first (groupByKeys $containers "Env.VIRTUAL_PROTO")) "http") }}
-
-{{/* Get the first cert name defined by containers w/ the same vhost */}}
 {{ $certName := (first (groupByKeys $containers "Env.CERT_NAME")) }}
-
-{{/* Get the best matching cert  by name for the vhost. */}}
 {{ $vhostCert := (closest (dir "/etc/nginx/certs") (printf "%s.crt" $host))}}
 
-{{/* vhostCert is actually a filename so remove any suffixes since they are added later */}}
 {{ $vhostCert := trimSuffix ".crt" $vhostCert }}
 {{ $vhostCert := trimSuffix ".key" $vhostCert }}
 
-{{/* Get the HTTPS_METHOD defined by containers w/ the same vhost, falling back to "redirect" */}}
 {{ $https_method := or (first (groupByKeys $containers "Env.HTTPS_METHOD")) "redirect" }}
-
 {{ $cert := (coalesce $certName $vhostCert) }}
 
 server {
